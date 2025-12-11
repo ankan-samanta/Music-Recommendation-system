@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emotion Music Recommendation</title>
+
+  <!-- Styles -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #f1f8e9, #e0f7fa);
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+      color: #2e2e2e;
+    }
+
+    h1, h2 {
+      font-family: 'Poppins', sans-serif;
+    }
+
+    h1 {
+      font-weight: 700;
+      color: #1b5e20;
+      text-align: center;
+      margin-bottom: 40px;
+      font-size: 2.8rem;
+    }
+
+    h2 {
+      color: #2e7d32;
+      font-weight: 600;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .container-fluid {
+      padding: 60px 30px;
+    }
+
+    .section {
+      background-color: #ffffff;
+      padding: 30px;
+      margin-bottom: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .video-section img {
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      max-height: 400px;
+      width: 100%;
+      object-fit: cover;
+    }
+
+    #ResultArea {
+      transition: all 0.3s ease;
+    }
+
+    table {
+      font-size: 0.95rem;
+      margin-top: 10px;
+    }
+
+    th {
+      background-color: #a5d6a7;
+      color: #1b5e20;
+    }
+
+    td, th {
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .row-cols-custom {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    @media (min-width: 768px) {
+      .row-cols-custom {
+        flex-direction: row;
+      }
+
+      .col-custom {
+        flex: 1;
+      }
+    }
+
+    /* New UI helpers */
+    #mode-controls {
+      position: fixed;
+      right: 18px;
+      top: 18px;
+      z-index: 1100;
+      display: flex;
+      gap: 8px;
+    }
+
+    #emoji-selector {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 1100;
+      display: flex;
+      gap: 8px;
+    }
+
+    .emoji-btn {
+      background: #ffffff;
+      border: 1px solid #ddd;
+      padding: 8px 10px;
+      font-size: 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform .08s ease;
+    }
+
+    .emoji-btn:hover { transform: translateY(-2px); }
+    .btn-mode { padding: 8px 12px; border-radius: 8px; }
+    .active-mode { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+
+    .status-badge {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 0.9rem;
+      color: #fff;
+      background: #6c757d;
+      padding: 4px 8px;
+      border-radius: 999px;
+    }
+
+    /* Small responsive adjustments for the camera image */
+    .video-wrap { min-height: 260px; display:flex; align-items:center; justify-content:center; }
+    @media (max-width:575px) {
+      #emoji-selector { right: 12px; bottom: 12px; }
+      #mode-controls { right: 12px; top: 12px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="mode-controls" aria-hidden="false">
+    <button id="mode-camera" class="btn btn-outline-success btn-mode">Camera</button>
+    <button id="mode-emoji" class="btn btn-outline-primary btn-mode">Emoji</button>
+  </div>
+
+  <div class="container-fluid">
+    <h1>🎵 Emotion Music Recommender 🎶</h1>
+
+    <div class="row-cols-custom">
+      <!-- Emotion Detector Section -->
+      <div class="section col-custom text-center">
+        <h2>🎥 Emotion Detector <span id="modeBadge" class="status-badge">Emoji</span></h2>
+
+        <!-- camera view (hidden when using emoji) -->
+        <div id="video-container" class="video-wrap" style="display: none;">
+          <!-- use <img> streaming from /video_feed -->
+          <img id="video-stream" src="/video_feed" alt="Video Feed" onerror="handleStreamError()" />
+        </div>
+
+        <!-- emoji selector (hidden when using camera) -->
+        <div id="emoji-container" style="display: none;">
+          <p>Select an emoji (or use camera mode) to get recommendations:</p>
+          <div id="emoji-selector">
+            <button class="emoji-btn" data-emoji="😄" title="Happy">😄</button>
+            <button class="emoji-btn" data-emoji="😢" title="Sad">😢</button>
+            <button class="emoji-btn" data-emoji="😡" title="Angry">😡</button>
+            <button class="emoji-btn" data-emoji="😐" title="Neutral">😐</button>
+            <button class="emoji-btn" data-emoji="😲" title="Surprised">😲</button>
+          </div>
+        </div>
+
+        <div id="camera-error" class="mt-3 text-danger" style="display:none;">
+          Camera not available on this server.
+        </div>
+
+        <!-- Capture controls and preview -->
+        <div id="capture-controls" class="mt-4" style="display:none; justify-content:center; gap:8px;">
+          <button id="btn-capture" class="btn btn-success">Capture</button>
+          <button id="btn-recapture" class="btn btn-outline-secondary" style="display:none;">Re-capture</button>
+          <span id="capture-msg" class="ms-2 text-success" style="display:none;">Captured!</span>
+        </div>
+
+        <div id="capture-preview" style="margin-top:12px; display:none; text-align:center;">
+          <p style="font-size:0.95rem; color:#444; margin-bottom:6px;">Captured Image</p>
+          <img id="captured-img" src="" alt="Captured face" style="max-width:260px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.12);" />
+        </div>
+      </div>
+
+      <!-- Song Recommendation Section -->
+      <div class="section col-custom">
+        <h2>🎧 Song Recommendations</h2>
+        <div id="ResultArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script type="text/javascript">
+    // initial mode from server if provided; fallback to 'emoji'
+    var initialMode = "{{ current_mode | default('emoji') }}";
+    if (!initialMode || initialMode === "{{ current_mode | default('emoji') }}") {
+      // safe fallback in case Jinja didn't render (e.g. static preview)
+      initialMode = 'emoji';
+    }
+
+    var pollTimer = null;
+    var pollIntervalMs = 800; // camera mode poll interval
+
+    function setModeUI(mode) {
+      if (mode === 'camera') {
+        $('#video-container').show();
+        $('#emoji-container').hide();
+        $('#modeBadge').text('Camera');
+        $('#mode-camera').addClass('active-mode');
+        $('#mode-emoji').removeClass('active-mode');
+        $('#capture-controls').show(); // show capture controls when camera active
+      } else {
+        $('#video-container').hide();
+        $('#emoji-container').show();
+        $('#modeBadge').text('Emoji');
+        $('#mode-emoji').addClass('active-mode');
+        $('#mode-camera').removeClass('active-mode');
+        $('#capture-controls').hide();
+        // hide captured preview if present when switching to emoji
+        $('#capture-preview').hide();
+        $('#btn-recapture').hide();
+        $('#capture-msg').hide();
+      }
+    }
+
+    function startPolling() {
+      stopPolling();
+      pollTimer = setInterval(function () {
+        refreshRecs();
+      }, pollIntervalMs);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function refreshRecs() {
+      // prefer /get_recs; fallback to /t
+      var recsUrl = '/get_recs';
+      $.getJSON(recsUrl).done(function (data) {
+        renderTable(data);
+      }).fail(function () {
+        // fallback to legacy /t
+        $.getJSON('/t', function (data) {
+          renderTable(data);
+        });
+      });
+    }
+
+    function renderTable(data) {
+      // data is an array of objects {Name, Album, Artist}
+      $("#ResultArea").html("");
+      var table = $("<table class='table table-hover table-bordered table-sm'></table>").appendTo("#ResultArea");
+      var thead = $("<thead></thead>").appendTo(table);
+      var rowHeader = $("<tr></tr>").appendTo(thead);
+      $("<th></th>").text("Name").appendTo(rowHeader);
+      $("<th></th>").text("Album").appendTo(rowHeader);
+      $("<th></th>").text("Artist").appendTo(rowHeader);
+
+      var tbody = $("<tbody></tbody>").appendTo(table);
+
+      if (!Array.isArray(data) || data.length === 0) {
+        var trEmpty = $("<tr></tr>").appendTo(tbody);
+        $("<td colspan='3'>No recommendations found</td>").appendTo(trEmpty);
+        return;
+      }
+
+      data.forEach(function (value) {
+        var tr = $("<tr></tr>").appendTo(tbody);
+        $("<td></td>").text(value.Name || "").appendTo(tr);
+        $("<td></td>").text(value.Album || "").appendTo(tr);
+        $("<td></td>").text(value.Artist || "").appendTo(tr);
+      });
+    }
+
+    // Mode control handlers
+    $('#mode-camera').on('click', function () {
+      // request server switch to camera mode
+      $.ajax({
+        url: '/set_mode',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ mode: 'camera' })
+      }).done(function (resp) {
+        // if server says OK, show camera UI
+        if (resp && resp.status === 'ok') {
+          setModeUI('camera');
+          // show video stream
+          $('#video-stream').attr('src', '/video_feed');
+          $('#camera-error').hide();
+          startPolling(); // poll recs while camera active
+        } else {
+          // show error if camera unavailable or server responded with error
+          $('#camera-error').show().text((resp && resp.message) ? resp.message : 'Camera not available');
+          setModeUI('emoji');
+          stopPolling();
+        }
+      }).fail(function (xhr) {
+        // fallback: still attempt to show camera (server might not implement /set_mode)
+        // try showing stream; if it fails the image onerror handler will show error
+        setModeUI('camera');
+        $('#video-stream').attr('src', '/video_feed');
+        startPolling();
+      });
+    });
+
+    $('#mode-emoji').on('click', function () {
+      $.ajax({
+        url: '/set_mode',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ mode: 'emoji' })
+      }).always(function () {
+        // clear src first to stop browser from fetching stream
+        $('#video-stream').attr('src', '');
+        setModeUI('emoji');
+        stopPolling();
+        // fetch current recommended list for emoji mode (server will use last chosen emoji or default)
+        refreshRecs();
+      });
+    });
+
+    // Emoji buttons: set emoji and update table
+    $(document).on('click', '.emoji-btn', function () {
+      var emoji = $(this).data('emoji');
+      $.ajax({
+        url: '/set_emoji',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ emoji: emoji })
+      }).done(function (resp) {
+        if (resp && resp.status === 'ok') {
+          // resp.data contains song list — refresh UI
+          renderTable(resp.data || []);
+        } else {
+          // fallback to polling refresh
+          refreshRecs();
+        }
+      }).fail(function () {
+        // fallback
+        refreshRecs();
+      });
+    });
+
+    // Capture button logic (one-shot capture)
+    $('#btn-capture').on('click', function () {
+      // disable capture button to avoid duplicate calls
+      $('#btn-capture').prop('disabled', true).text('Capturing...');
+      $('#capture-msg').hide();
+      $('#capture-preview').hide();
+      $('#btn-recapture').hide();
+
+      $.ajax({
+        url: '/capture_face',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({}) // no payload needed
+      }).done(function (resp) {
+        if (resp && resp.status === 'ok') {
+          // show captured image
+          if (resp.image) {
+            $('#captured-img').attr('src', resp.image);
+            $('#capture-preview').show();
+          }
+          // update table from resp.data
+          if (Array.isArray(resp.data)) {
+            renderTable(resp.data);
+          } else {
+            refreshRecs();
+          }
+          $('#capture-msg').show().text('Captured! Showing recommendations.');
+          $('#btn-recapture').show();
+        } else {
+          alert('Capture failed: ' + (resp && resp.message ? resp.message : 'unknown error'));
+        }
+      }).fail(function (xhr) {
+        alert('Capture request failed. Is the camera available on the server?');
+      }).always(function () {
+        $('#btn-capture').prop('disabled', false).text('Capture');
+      });
+    });
+
+  // Re-capture button: start camera and reset preview so user can capture again
+$('#btn-recapture').off('click').on('click', function () {
+  // Call server to recreate a fresh camera instance
+  $.ajax({
+    url: '/set_mode',
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({ mode: 'camera' })
+  }).done(function (resp) {
+    if (resp && resp.status === 'ok') {
+      // Hide preview & UI reset
+      $('#capture-preview').hide();
+      $('#capture-msg').hide();
+      $('#btn-recapture').hide();
+      $('#captured-img').attr('src', '');
+
+      // Ensure UI shows camera controls
+      setModeUI('camera');
+
+      // Force the browser to open a NEW connection to the streaming endpoint.
+      // Append a timestamp query to bust caches and guarantee a fresh multipart response.
+      var newSrc = '/video_feed?ts=' + Date.now();
+      $('#video-stream').attr('src', newSrc);
+
+      // Small delay to allow the server to initialize camera thread; then start polling.
+      // If you want it faster, reduce timeout to 50ms; 120-200ms is conservative.
+      setTimeout(function () {
+        $('#camera-error').hide();
+        startPolling();
+      }, 150);
+
+    } else {
+      var msg = (resp && resp.message) ? resp.message : 'Cannot start camera';
+      alert(msg);
+    }
+  }).fail(function (xhr) {
+    alert('Failed to start camera. Check server logs.');
+  });
+});
+
+
+    // handle broken stream gracefully
+    function handleStreamError() {
+      $('#camera-error').show().text('Video stream not available (server may not support camera or is busy).');
+      setModeUI('emoji');
+      stopPolling();
+      refreshRecs();
+    }
+
+    // initial setup on page load
+    $(function () {
+      // decide initial UI based on server-sent initialMode variable
+      var mode = initialMode || 'emoji';
+      if (mode === 'camera') {
+        $('#video-stream').attr('src', '/video_feed');
+        setModeUI('camera');
+        startPolling();
+      } else {
+            // $('#video-container').hide();       // << completely hides video zone
+            // $('#emoji-container').show();       
+        setModeUI('emoji');
+        stopPolling();
+      }
+      // load initial recommendations
+      refreshRecs();
+    });
+
+    // Optional: reload table every 8s when in emoji mode to pick up external changes
+    setInterval(function () {
+      if ($('#emoji-container').is(':visible')) refreshRecs();
+    }, 8000);
+  </script>
+</body>
+
+</html>
