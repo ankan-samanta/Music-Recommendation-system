@@ -134,9 +134,24 @@ def gen(camera):
             time.sleep(0.05)
 
 
+# @app.route('/')
+# def index():
+#     """Render main page (index.html). Template expects headings, data, current_mode."""
+#     with _state_lock:
+#         local_df = df1.copy() if isinstance(df1, pd.DataFrame) else pd.DataFrame(columns=["Name","Album","Artist"])
+#         mode = current_mode
+#     return render_template('index.html', headings=headings, data=local_df, current_mode=mode)
+
+# @app.route('/get-started')
+# def get_started():
+#     return render_template('get_started.html')
+
 @app.route('/')
+def landing():
+    return render_template('get_started.html')
+
+@app.route('/app')
 def index():
-    """Render main page (index.html). Template expects headings, data, current_mode."""
     with _state_lock:
         local_df = df1.copy() if isinstance(df1, pd.DataFrame) else pd.DataFrame(columns=["Name","Album","Artist"])
         mode = current_mode
@@ -215,7 +230,6 @@ def set_mode():
     with _state_lock:
         current_mode = mode
     return jsonify({"status": "ok", "mode": current_mode})
-
 
 @app.route('/capture_face', methods=['POST'])
 def capture_face():

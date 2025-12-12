@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Get Started — Emotion Music Recommender</title>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap" rel="stylesheet" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet" crossorigin="anonymous">
+
+  <style>
+    /* SUNO Dark-Inspired Variables */
+    :root {
+      --bg-dark: #120A14; /* Deep, dark background */
+      --text-light: #ffffff;
+      --text-subtle: #9ca3af;
+      --accent-primary: #FF4785; /* Pink/Red for contrast */
+      --accent-secondary: #ffaf24; /* Orange/Yellow for warm contrast */
+      --input-bg: rgba(255, 255, 255, 0.08); /* Dark input field */
+      --card-bg: rgba(255, 255, 255, 0.05); /* Semi-transparent dark card */
+      --radius-lg: 16px;
+      --radius-sm: 10px;
+      --max-width: 980px;
+    }
+
+    /* Reset & layout */
+    * { box-sizing: border-box; }
+    html,body { height: 100%; }
+
+    body {
+      background: var(--bg-dark);
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      padding: 30px;
+      color: var(--text-light);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Background Blur/Gradient Effect */
+    .background-vignette::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at center, rgba(139, 4, 153, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: -2;
+    }
+
+    .background-vignette::after {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(600px at 20% 80%, rgba(255, 69, 114, 0.12), transparent),
+        radial-gradient(800px at 80% 20%, rgba(255, 175, 36, 0.12), transparent);
+      filter: blur(100px);
+      pointer-events: none;
+      z-index: -1;
+      opacity: 0.8;
+    }
+
+    .container {
+      width: 100%;
+      max-width: var(--max-width);
+      margin: 0 20px;
+      text-align: center;
+      padding: 40px 28px;
+      animation: fadeIn 0.8s ease;
+      z-index: 10;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    header.topbar {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-light);
+      z-index: 50;
+      font-weight: 600;
+    }
+
+    .brand-emoji { font-size: 22px; line-height: 1; }
+
+    .header-title {
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+      font-size: clamp(28px, 6vw, 64px);
+      font-weight: 800;
+      line-height: 1.05;
+      margin: 10px 0 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .header-title .emphasis {
+      display: inline-block;
+      background: linear-gradient(90deg,var(--accent-primary), var(--accent-secondary));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    p.tagline {
+      font-size: 1.05rem;
+      color: var(--text-subtle);
+      max-width: 720px;
+      margin: 0 auto 34px;
+    }
+
+    /* Form area (kept in CSS but removed in HTML) */
+    .input-area {
+      background: var(--input-bg);
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      max-width: 720px;
+      margin: 0 auto 40px;
+      border: 1px solid rgba(255,255,255,0.06);
+      gap: 10px;
+    }
+
+    .input-area form { display: flex; align-items: center; width: 100%; gap: 10px; }
+
+    .visually-hidden {
+      position: absolute !important;
+      height: 1px; width: 1px; overflow: hidden;
+      clip: rect(1px, 1px, 1px, 1px);
+      white-space: nowrap; border: 0; padding: 0; margin: -1px;
+    }
+
+    .input-area input[type="text"] {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-light);
+      padding: 12px 16px;
+      outline: none;
+      font-size: 1rem;
+      min-width: 0; /* allow shrinking */
+    }
+
+    .input-area input::placeholder { color: var(--text-subtle); }
+
+    .btn-create {
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+      color: var(--text-light);
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 1rem;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      overflow: hidden; /* allow ripples inside */
+    }
+
+    .btn-create:focus { outline: 3px solid rgba(255,71,133,0.18); }
+    .btn-create:hover { transform: translateY(-2px); }
+
+    /* Features */
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .feature-box {
+      background: var(--card-bg);
+      backdrop-filter: blur(6px);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      flex-basis: 45%;
+      text-align: left;
+      border: 1px solid rgba(255,255,255,0.04);
+      transition: transform 0.2s;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      will-change: transform, opacity;
+    }
+
+    .feature-box:hover { transform: translateY(-6px); }
+
+    .feature-box .icon { width: 48px; height: 48px; border-radius: 10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .feature-box strong { font-size: 1.05rem; display:block; }
+    .feature-box span { color: var(--text-subtle); font-size: 0.95rem; }
+
+    .ic-ai { background: linear-gradient(135deg, #1f7a3a, #5ac27c); }
+    .ic-emoji { background: linear-gradient(135deg, #4dabff, #78c7ff); }
+    .ic-safe { background: linear-gradient(135deg, #ff9966, #ff6a4c); }
+    .ic-easy { background: linear-gradient(135deg, #9b7dff, #bda6ff); }
+
+    @media (max-width: 760px) {
+      .feature-box { flex-basis: 100%; }
+      .container { padding: 28px 18px; }
+      .input-area { flex-direction: column; align-items: stretch; padding: 12px; }
+      .input-area form { flex-direction: column; }
+      .btn-create { width: 100%; justify-content: center; }
+    }
+
+    /* ripple keyframes (used by JS-inserted ripple) */
+    @keyframes rippleAnim {
+      from { transform: scale(0); opacity: 0.6; }
+      to { transform: scale(3.5); opacity: 0; }
+    }
+
+    /* ===== NEW HERO STYLES (only for the replacement block) ===== */
+    .hero {
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto 40px;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      /* background-image:
+        linear-gradient(180deg, rgba(6,6,10,0.25), rgba(10,8,12,0.45)),
+        url("Screenshot%202025-12-11%20235521.png"); */
+      /* background-size: cover; */
+      /* background-position: center; */
+      /* box-shadow: 0 18px 50px rgba(0,0,0,0.5); */
+    }
+    .hero .headline {
+      font-family: "Pacifico", "Space Grotesk", sans-serif;
+      color: var(--text-light);
+      font-size: clamp(28px, 4.8vw, 56px);
+      margin: 0 0 8px;
+      line-height: 1;
+      text-shadow: 0 8px 28px rgba(0,0,0,0.6);
+    }
+    .hero .sub {
+      color: rgba(255,255,255,0.9);
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+      opacity: 0.95;
+      margin-top: 21px;
+    }
+    .hero .cta {
+      display:inline-block;
+      padding:12px 28px;
+      border-radius:28px;
+      background:linear-gradient(90deg,#FF4785,#ffaf24);
+      /* background: linear-gradient(90deg, #8b5cff, #6f2bd8); */
+      color: #fff;
+      font-weight:800;
+      text-decoration:none;
+      /* box-shadow: 0 12px 30px rgba(111,43,216,0.28); */
+      transition: transform 180ms ease, box-shadow 180ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero .cta:hover { transform: translateY(-4px); box-shadow: 0 22px 48px rgba(111,43,216,0.36); }
+
+    @media (max-width:760px) {
+      .hero { height: 260px; border-radius: 12px; }
+      .hero .headline { font-size: 28px; }
+      .hero .cta { padding: 10px 20px; }
+    }
+    /* ===== end hero styles ===== */
+  </style>
+</head>
+
+<body class="background-vignette">
+  <header class="topbar" aria-hidden="false" style="position:absolute; top:24px; left:24px; right:24px; display:flex; align-items:center; justify-content:space-between;">
+    <!-- LEFT: Logo + Brand -->
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div class="brand-emoji" aria-hidden="true">🎵</div>
+      <div style="font-weight:600;">Emotion Music Recommender</div>
+    </div>
+
+    <!-- RIGHT: Buttons -->
+    <div style="display:flex; gap:12px;">
+      <a href="/signup" style="background:linear-gradient(90deg,#FF4785,#ffaf24); padding:8px 16px; border-radius:8px; color:#fff; font-weight:600; text-decoration:none;" id="signupBtn">Sign Up</a>
+      <a href="/login" style="border:1px solid rgba(255,255,255,0.4); padding:8px 16px; border-radius:8px; color:#fff; font-weight:600; text-decoration:none;" id="loginBtn">Login</a>
+    </div>
+  </header>
+
+  <main class="container" role="main">
+    <h1 class="header-title">
+      Find a song that <br>
+      <span class="emphasis">matches your mood</span>
+    </h1>
+
+    <p class="tagline">Start with a simple emotion or dive into our advanced features. Your next track is just a step away.</p>
+
+    <!-- ===== REPLACED: hero block in place of search bar and button ===== -->
+    <div class="hero" role="region" aria-label="Hero">
+      <div>
+        <h2 class="headline">Music is my escape</h2>
+        <p class="sub">Share & Promote our music online</p>
+        <!-- CTA links to same app route as previous Get Started -->
+        <a href="/app" class="cta" id="heroCta" aria-label="Let start now">LET START NOW</a>
+      </div>
+    </div>
+    <!-- ===== end replacement ===== -->
+
+    <section class="features" aria-label="Features">
+      <div class="feature-box">
+        <div class="icon ic-ai" aria-hidden="true">AI</div>
+        <div>
+          <strong>Real-time emotion detection</strong>
+          <span>Fast and privacy-friendly — camera optional.</span>
+        </div>
+      </div>
+
+      <div class="feature-box">
+        <div class="icon ic-emoji" aria-hidden="true">🎭</div>
+        <div>
+          <strong>Emoji playlist mode</strong>
+          <span>Pick an emoji, get instant songs.</span>
+        </div>
+      </div>
+
+      <div class="feature-box">
+        <div class="icon ic-safe" aria-hidden="true">🔒</div>
+        <div>
+          <strong>Camera optional</strong>
+          <span>Turn it off anytime — respect privacy.</span>
+        </div>
+      </div>
+
+      <div class="feature-box">
+        <div class="icon ic-easy" aria-hidden="true">⚙️</div>
+        <div>
+          <strong>Easy interface</strong>
+          <span>Designed for a smooth and fast user flow.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- JS: added animations, ripples, focus shortcut (paste-only, no CSS/HTML changed except hero block above) -->
+  <script>
+    /* Ripple Effect for Buttons (keeps working for hero CTA too) */
+    function createRipple(e) {
+      const btn = e.currentTarget;
+      // compute diameter
+      const rect = btn.getBoundingClientRect();
+      const diameter = Math.max(rect.width, rect.height) * 1.2;
+      const radius = diameter / 2;
+
+      const circle = document.createElement("span");
+      circle.style.width = circle.style.height = diameter + "px";
+      // position relative to page & button
+      const left = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left - radius;
+      const top = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top - radius;
+      circle.style.left = left + "px";
+      circle.style.top = top + "px";
+
+      circle.style.position = "absolute";
+      circle.style.borderRadius = "50%";
+      circle.style.background = "radial-gradient(circle, rgba(255,255,255,0.18), rgba(255,255,255,0.06))";
+      circle.style.pointerEvents = "none";
+      circle.style.transform = "scale(0)";
+      circle.style.opacity = "0.9";
+      circle.style.animation = "rippleAnim 650ms cubic-bezier(.2,.9,.3,1)";
+      circle.className = "ripple-effect";
+
+      // ensure btn has position for absolute element
+      if (getComputedStyle(btn).position === "static") {
+        btn.style.position = "relative";
+      }
+
+      btn.appendChild(circle);
+      setTimeout(() => {
+        try { circle.remove(); } catch (err) {}
+      }, 700);
+    }
+
+    // attach ripple to interactive elements (including new hero CTA)
+    const rippleTargets = [
+      ...document.querySelectorAll(".btn-create"),
+      document.getElementById('signupBtn'),
+      document.getElementById('loginBtn'),
+      document.getElementById('heroCta')  // hero CTA included
+    ].filter(Boolean);
+
+    rippleTargets.forEach(btn => {
+      btn.addEventListener('pointerdown', createRipple);
+      // add subtle hover lift via JS (complements CSS)
+      btn.addEventListener('mouseenter', () => {
+        btn.style.transform = 'translateY(-4px)';
+        btn.style.transition = 'transform 180ms ease, box-shadow 180ms ease';
+        btn.style.boxShadow = '0 10px 30px rgba(0,0,0,0.32)';
+      });
+      btn.addEventListener('mouseleave', () => {
+        btn.style.transform = '';
+        btn.style.boxShadow = 'none';
+      });
+    });
+
+    /* Smooth fade-in/stagger for feature boxes */
+    window.addEventListener('DOMContentLoaded', () => {
+      const boxes = document.querySelectorAll('.feature-box');
+      boxes.forEach((box, i) => {
+        box.style.opacity = '0';
+        box.style.transform = 'translateY(20px)';
+        box.style.transition = 'opacity 520ms cubic-bezier(.2,.9,.3,1), transform 520ms cubic-bezier(.2,.9,.3,1)';
+        setTimeout(() => {
+          box.style.opacity = '1';
+          box.style.transform = 'translateY(0)';
+        }, i * 150 + 120);
+      });
+
+      // small hero CTA entrance (if present)
+      const heroCta = document.getElementById('heroCta');
+      if (heroCta) {
+        heroCta.style.opacity = 0;
+        heroCta.style.transform = 'translateY(8px)';
+        setTimeout(()=>{ heroCta.style.transition = 'opacity 420ms ease, transform 420ms ease'; heroCta.style.opacity = 1; heroCta.style.transform = 'translateY(0)'; }, 180);
+      }
+    });
+
+    /* Focus input with '/' keyboard shortcut (no input present — code will safely exit) */
+    window.addEventListener('keydown', (e) => {
+      const active = document.activeElement;
+      if (e.key === '/' && active && active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const mood = document.getElementById('mood');
+        if (mood) {
+          mood.focus();
+          // small visual hint
+          mood.style.transition = 'box-shadow 220ms ease';
+          mood.style.boxShadow = '0 0 0 4px rgba(255,71,133,0.12)';
+          setTimeout(() => { mood.style.boxShadow = ''; }, 900);
+        } else {
+          // focus hero CTA as fallback
+          const heroCta = document.getElementById('heroCta');
+          if (heroCta) heroCta.focus();
+        }
+      }
+    });
+
+    /* Small form-check + subtle toast (in-page temporary message) */
+    function showTemporaryMessage(msg, ttl = 2000) {
+      let el = document.getElementById('__temp_msg');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = '__temp_msg';
+        Object.assign(el.style, {
+          position: 'fixed',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          bottom: '26px',
+          padding: '10px 16px',
+          background: 'rgba(10,10,10,0.9)',
+          color: '#fff',
+          borderRadius: '10px',
+          zIndex: 9999,
+          boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+          opacity: '0',
+          transition: 'opacity 240ms ease, transform 240ms ease'
+        });
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+      el.style.opacity = '1';
+      el.style.transform = 'translateX(-50%) translateY(0)';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-50%) translateY(10px)';
+      }, ttl);
+    }
+
+    // legacy form validation: if form exists it still runs; otherwise harmless
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.querySelector('form[role="search"]');
+      if (!form) return;
+      form.addEventListener('submit', (e) => {
+        const mood = document.getElementById('mood');
+        if (!mood || !mood.value.trim()) {
+          e.preventDefault();
+          showTemporaryMessage('Please type your mood or allow detection.');
+          if (mood) mood.focus();
+          return false;
+        }
+        // harmless UX toast (won't block navigation)
+        showTemporaryMessage('Finding songs for “' + (mood.value.trim()) + '”…', 1800);
+      });
+    });
+  </script>
+</body>
+</html>
