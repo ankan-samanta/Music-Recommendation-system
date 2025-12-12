@@ -54,8 +54,5 @@ emotion_model_info = emotion_model.fit_generator(
     validation_steps = 7178 // 64
 )
 
-# emotion_model.save_weights('model.h5')
-emotion_model.save('model2.h5')   # saves architecture + weights + optimizer state
-
-
+emotion_model.save('model3.h5')
 
