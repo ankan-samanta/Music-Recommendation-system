@@ -54,5 +54,5 @@ emotion_model_info = emotion_model.fit_generator(
     validation_steps = 7178 // 64
 )
 
-emotion_model.save('model3.h5')
+emotion_model.save('model_final.h5')
 

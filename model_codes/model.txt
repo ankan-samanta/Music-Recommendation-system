@@ -1,0 +1,385 @@
+-------------my model code 3rd-----------------------------1-30 epoch
+
+# train_fer2013_kaggle.py
+# Full, robust training script for FER2013 on Kaggle.
+# - Detects fer2013 in common Kaggle locations (folder or CSV)
+# - Converts CSV -> folder structure if needed
+# - Builds generators, model, callbacks
+# - Saves best model to /kaggle/working and writes class mapping JSON
+# Adjust SETTINGS below as needed before running.
+
+import os
+import shutil
+import math
+import json
+import numpy as np
+import pandas as pd
+from PIL import Image
+from pathlib import Path
+
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Conv2D, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization
+)
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+
+# -------------------------
+# SETTINGS (edit as needed)
+# -------------------------
+IMG_HEIGHT = 48
+IMG_WIDTH = 48
+BATCH_SIZE = 32
+EPOCHS = 30
+SEED = 42
+CLASS_MAP = {0: 'Angry', 1: 'Disgust', 2: 'Fear', 3: 'Happy', 4: 'Neutral', 5: 'Sad', 6: 'Surprise'}
+
+# Output locations (Kaggle working directory recommended)
+WORKING_DIR = "/kaggle/working"
+os.makedirs(WORKING_DIR, exist_ok=True)
+MODEL_OUT_PATH = os.path.join(WORKING_DIR, "model_file.h5")
+CLASS_MAP_JSON_PATH = os.path.join(WORKING_DIR, "class_indices.json")
+
+# -------------------------
+# Helper: file detection
+# -------------------------
+def exists(p): return os.path.exists(p)
+def listdir(p): return os.listdir(p) if exists(p) else []
+
+# Common possible dataset locations (Kaggle-first)
+possible_folder_paths = [
+    "/kaggle/input/fer2013",
+    "/kaggle/input/fer2013/",
+    "/kaggle/working/fer2013",
+    "./fer2013",
+    "./dataset/fer2013",
+    "./data/fer2013"
+]
+possible_csv_paths = [
+    "/kaggle/input/fer2013/fer2013.csv",
+    "./fer2013.csv",
+    "./dataset/fer2013/fer2013.csv",
+    "./data/fer2013/fer2013.csv"
+]
+
+found_folder = None
+for p in possible_folder_paths:
+    if exists(p):
+        # accept if contains train/test folders or the CSV
+        if exists(os.path.join(p, "train")) and exists(os.path.join(p, "test")):
+            found_folder = p
+            break
+        if "fer2013.csv" in listdir(p):
+            found_folder = p
+            break
+        # some Kaggle datasets expose the CSV inside the folder
+        if any(name.lower().endswith(('.csv','.zip')) or name in ("train","test") for name in listdir(p)):
+            found_folder = p
+            break
+
+found_csv = None
+if not found_folder:
+    for p in possible_csv_paths:
+        if exists(p):
+            found_csv = p
+            break
+
+# If folder contains the CSV file, point found_csv
+if found_folder and exists(os.path.join(found_folder, "fer2013.csv")):
+    found_csv = os.path.join(found_folder, "fer2013.csv")
+
+train_dir = None
+val_dir = None
+tmp_base = None
+
+# If folder contains train/test, use them
+if found_folder:
+    if exists(os.path.join(found_folder, "train")) and exists(os.path.join(found_folder, "test")):
+        train_dir = os.path.join(found_folder, "train")
+        val_dir = os.path.join(found_folder, "test")
+
+# If CSV present and no train/test folders, convert CSV to folder structure in writable dir
+if (found_csv or (found_folder and exists(os.path.join(found_folder, "fer2013.csv")))) and (not train_dir or not val_dir):
+    csv_path = found_csv if found_csv else os.path.join(found_folder, "fer2013.csv")
+    print("Found CSV at:", csv_path)
+    tmp_base = os.path.join(WORKING_DIR, "fer_dataset")
+    if os.path.exists(tmp_base):
+        shutil.rmtree(tmp_base)
+    os.makedirs(tmp_base, exist_ok=True)
+
+    df = pd.read_csv(csv_path)
+    # CSV expected columns: emotion, pixels, Usage
+    idx = 0
+    for _, row in df.iterrows():
+        usage = None
+        if 'Usage' in row and pd.notna(row['Usage']):
+            usage = row['Usage']
+        elif 'usage' in row and pd.notna(row['usage']):
+            usage = row['usage']
+
+        if usage is None:
+            split = 'train' if (idx % 5) != 0 else 'test'  # ~80/20
+        else:
+            split = 'train' if str(usage).lower().startswith('train') else 'test'
+
+        emotion = int(row['emotion'])
+        label = CLASS_MAP.get(emotion, str(emotion))
+        out_dir = os.path.join(tmp_base, split, label)
+        os.makedirs(out_dir, exist_ok=True)
+
+        pixels = row['pixels']
+        arr = np.fromstring(pixels, dtype=np.uint8, sep=' ')
+        img = Image.fromarray(arr.reshape((48,48)))
+        img_path = os.path.join(out_dir, f"{idx}.png")
+        img.save(img_path)
+        idx += 1
+
+    train_dir = os.path.join(tmp_base, "train")
+    val_dir = os.path.join(tmp_base, "test")
+
+# If dataset folder already has class subfolders but not train/test, treat as train and auto-split (optional)
+if not (train_dir and val_dir) and found_folder:
+    # If found_folder contains class subfolders, treat it as training set and create validation split using flow_from_directory's validation_split
+    # But for simplicity here we require explicit train/test structure or CSV conversion above.
+    # If you want to use single-folder with validation_split, adapt generator code below accordingly.
+    pass
+
+# Final existence check
+if not train_dir or not val_dir or not exists(train_dir) or not exists(val_dir):
+    raise FileNotFoundError(
+        "Could not locate train/test folders. Tried script paths. "
+        "On Kaggle: either provide a dataset with /train and /test folders, or upload fer2013.csv."
+    )
+
+# Useful prints
+def count_images(path):
+    total = 0
+    for root, dirs, files in os.walk(path):
+        total += len([f for f in files if f.lower().endswith(('.png','.jpg','.jpeg'))])
+    return total
+
+print("Train dir:", train_dir, " - images:", count_images(train_dir))
+print("Val dir:", val_dir, " - images:", count_images(val_dir))
+
+# -------------------------
+# Data generators
+# -------------------------
+train_datagen = ImageDataGenerator(
+    rescale=1.0/255.0,
+    rotation_range=20,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    shear_range=0.15,
+    zoom_range=0.15,
+    horizontal_flip=True,
+    fill_mode="nearest"
+)
+
+val_datagen = ImageDataGenerator(rescale=1.0/255.0)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    color_mode="grayscale",
+    batch_size=BATCH_SIZE,
+    class_mode="categorical",
+    shuffle=True,
+    seed=SEED
+)
+
+validation_generator = val_datagen.flow_from_directory(
+    val_dir,
+    target_size=(IMG_HEIGHT, IMG_WIDTH),
+    color_mode="grayscale",
+    batch_size=BATCH_SIZE,
+    class_mode="categorical",
+    shuffle=False,
+    seed=SEED
+)
+
+# Save class mapping: index -> label as JSON (used by inference/camera)
+class_indices = train_generator.class_indices
+index_to_label = {str(v): k for k, v in class_indices.items()}
+with open(CLASS_MAP_JSON_PATH, "w") as f:
+    json.dump(index_to_label, f)
+print("Saved class mapping to", CLASS_MAP_JSON_PATH, "->", class_indices)
+
+# -------------------------
+# Model definition
+# -------------------------
+def build_model(input_shape=(IMG_HEIGHT, IMG_WIDTH, 1), n_classes=len(class_indices)):
+    model = Sequential()
+    model.add(Conv2D(32, (3,3), activation="relu", input_shape=input_shape))
+    model.add(BatchNormalization())
+    model.add(Conv2D(64, (3,3), activation="relu"))
+    model.add(MaxPooling2D((2,2)))
+    model.add(Dropout(0.25))
+
+    model.add(Conv2D(128, (3,3), activation="relu"))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D((2,2)))
+    model.add(Conv2D(128, (3,3), activation="relu"))
+    model.add(MaxPooling2D((2,2)))
+    model.add(Dropout(0.25))
+
+    model.add(Flatten())
+    model.add(Dense(1024, activation="relu"))
+    model.add(Dropout(0.5))
+    model.add(Dense(n_classes, activation="softmax"))
+    return model
+
+model = build_model()
+opt = Adam(learning_rate=1e-4)
+model.compile(optimizer=opt, loss="categorical_crossentropy", metrics=["accuracy"])
+model.summary()
+
+# -------------------------
+# Callbacks & training
+# -------------------------
+num_train_imgs = count_images(train_dir)
+num_val_imgs = count_images(val_dir)
+steps_per_epoch = max(1, math.ceil(num_train_imgs / BATCH_SIZE))
+validation_steps = max(1, math.ceil(num_val_imgs / BATCH_SIZE))
+
+ckpt = ModelCheckpoint(MODEL_OUT_PATH, monitor="val_accuracy", save_best_only=True, verbose=1, mode="max")
+rlr  = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=4, verbose=1)
+es   = EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True, verbose=1)
+
+history = model.fit(
+    train_generator,
+    steps_per_epoch=steps_per_epoch,
+    epochs=EPOCHS,
+    validation_data=validation_generator,
+    validation_steps=validation_steps,
+    callbacks=[ckpt, rlr, es],
+    verbose=1
+)
+
+# -------------------------
+# Ensure best model file exists in working dir (ModelCheckpoint saved it)
+# -------------------------
+if os.path.exists(MODEL_OUT_PATH):
+    print("Best model saved to:", MODEL_OUT_PATH)
+else:
+    # fallback: save current model (less ideal)
+    model.save(MODEL_OUT_PATH)
+    print("Model saved to (fallback):", MODEL_OUT_PATH)
+
+# Optionally save training history to disk for later inspection
+history_path = os.path.join(WORKING_DIR, "training_history.json")
+try:
+    h = {k: [float(x) for x in v] for k, v in history.history.items()}
+    with open(history_path, "w") as fh:
+        json.dump(h, fh)
+    print("Saved history to", history_path)
+except Exception as e:
+    print("Could not save history:", e)
+
+print("Training complete.")
+--------------------------------------------------------------------------------------
+------------------------4th retrainig 31-70 -epochs------------------------------------
+# ===== Resume training (robust to tf versions & eager-mode issues) =====
+import os, math, shutil
+import tensorflow as tf
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger
+
+# Paths and epochs
+MODEL_OUT_PATH = "/kaggle/working/model_file.h5"  # path to your saved model
+WORKING_DIR = "/kaggle/working"
+START_EPOCH = 30
+TOTAL_EPOCHS = 70
+BATCH_SIZE = 32  # keep same as before
+
+if not os.path.exists(MODEL_OUT_PATH):
+    raise FileNotFoundError(MODEL_OUT_PATH)
+
+# Option A (recommended): load without compile and recompile with run_eagerly=True
+model = tf.keras.models.load_model(MODEL_OUT_PATH, compile=False)
+print("Loaded model (compile=False)")
+
+# Recreate optimizer with a lowered LR (safe for fine-tuning)
+resumed_lr = 1e-5  # smaller than your original 1e-4; adjust as needed
+opt = tf.keras.optimizers.Adam(learning_rate=resumed_lr)
+
+# Compile with run_eagerly=True to avoid numpy() on tensors issues
+model.compile(optimizer=opt, loss="categorical_crossentropy", metrics=["accuracy"], run_eagerly=True)
+print("Recompiled model with Adam lr=", resumed_lr, "and run_eagerly=True")
+
+# Callbacks (safe set)
+ckpt_best = ModelCheckpoint(
+    os.path.join(WORKING_DIR, "model_best.h5"),
+    monitor="val_accuracy", save_best_only=True, mode="max", verbose=1
+)
+rlr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=4, verbose=1)
+es = EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True, verbose=1)
+csv_logger = CSVLogger(os.path.join(WORKING_DIR, "training_resume_log.csv"), append=True)
+callbacks = [ckpt_best, rlr, es, csv_logger]
+
+# compute steps (you already have count_images, train_dir, val_dir)
+num_train_imgs = count_images(train_dir)
+num_val_imgs = count_images(val_dir)
+steps_per_epoch = max(1, math.ceil(num_train_imgs / BATCH_SIZE))
+validation_steps = max(1, math.ceil(num_val_imgs / BATCH_SIZE))
+
+# Fit (initial_epoch crucial)
+history = model.fit(
+    train_generator,
+    steps_per_epoch=steps_per_epoch,
+    epochs=TOTAL_EPOCHS,
+    validation_data=validation_generator,
+    validation_steps=validation_steps,
+    callbacks=callbacks,
+    verbose=1,
+    initial_epoch=START_EPOCH
+)
+
+# Save final fallback
+final_path = os.path.join(WORKING_DIR, "model_resumed_final.h5")
+model.save(final_path)
+print("Resumed training finished; final model saved to", final_path)
+--------------------------------------------------------------------------------------
+------------------------------ 5th train accuracy--------------------------------------
+test_loss, test_accuracy = model.evaluate(validation_generator)
+print("Test Accuracy:", test_accuracy)
+print("Test Loss:", test_loss)
+
+-------------o/p-----------------
+225/225 ━━━━━━━━━━━━━━━━━━━━ 10s 45ms/step - accuracy: 0.5708 - loss: 1.1128
+Test Accuracy: 0.6351351141929626
+Test Loss: 0.982718825340271
+----------------------------------------------------------------------------
+-----------------------1st--------------------------------------
+import tensorflow as tf
+print("GPUs Available:", tf.config.list_physical_devices('GPU'))
+
+
+----------------------- 2nd   copy kaggle data----------------------------------
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+train_dir = '/kaggle/input/fer2013/train'
+val_dir   = '/kaggle/input/fer2013/test'
+
+datagen = ImageDataGenerator(rescale=1./255)
+
+train_gen = datagen.flow_from_directory(
+    train_dir,
+    target_size=(48,48),
+    color_mode='grayscale',
+    class_mode='categorical',
+    batch_size=64,
+    shuffle=True
+)
+
+val_gen = datagen.flow_from_directory(
+    val_dir,
+    target_size=(48,48),
+    color_mode='grayscale',
+    class_mode='categorical',
+    batch_size=64,
+    shuffle=False
+)
+-------------------o/p---------------------
+Found 28709 images belonging to 7 classes.
+Found 7178 images belonging to 7 classes.
