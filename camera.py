@@ -24,6 +24,8 @@ import pandas as pd
 import json
 import sys
 
+
+
 # TensorFlow / Keras
 import tensorflow as tf
 from tensorflow.keras.models import load_model
@@ -40,7 +42,8 @@ MODEL_PATH = "model_final.h5"   # change to model_best.h5 if you have that
 CLASS_MAP_JSON = "class_indices.json"
 DEFAULT_WINDOW_LEN = 5
 DEFAULT_CONF_THRESHOLD = 0.40   # set ~0.55 for production; lower for debug
-DEBUG_PRED = True               # set True to print prediction arrays and diagnostics
+DEBUG_PRED = True 
+PREDICTION_DONE = False              # set True to print prediction arrays and diagnostics
 
 # fallback mapping if class_indices can't be read
 fallback_emotion_dict = {
@@ -177,6 +180,33 @@ else:
 # -------------------------------
 # Prediction helper
 # -------------------------------
+# def _predict_emotion_from_model(face_gray, model, debug=False):
+#     if model is None:
+#         return None, 0.0
+#     try:
+#         if face_gray is None or face_gray.size == 0:
+#             if debug:
+#                 print("[camera.py] Empty face crop; skipping predict.")
+#             return None, 0.0
+#         # ensure shape is correct
+#         face_resized = cv2.resize(face_gray, (48, 48))
+#         arr = face_resized.astype('float32') / 255.0
+#         arr = np.expand_dims(arr, axis=0)   # (1,48,48)
+#         arr = np.expand_dims(arr, axis=-1)  # (1,48,48,1)
+#         preds = model.predict(arr, verbose=0)
+#         preds = np.asarray(preds).reshape(-1)
+#         idx = int(np.argmax(preds))
+#         conf = float(np.max(preds))
+#         if debug or DEBUG_PRED:
+#             print(f"[camera.py] predict -> idx={idx}, conf={conf:.4f}, preds={np.round(preds,4)}")
+#         return idx, conf
+#     except Exception as e:
+#         if DEBUG_PRED:
+#             print("[camera.py] Prediction error:", e)
+#             traceback.print_exc()
+#         return None, 0.0
+
+# .............................................................................................................
 def _predict_emotion_from_model(face_gray, model, debug=False):
     if model is None:
         return None, 0.0
@@ -185,23 +215,51 @@ def _predict_emotion_from_model(face_gray, model, debug=False):
             if debug:
                 print("[camera.py] Empty face crop; skipping predict.")
             return None, 0.0
-        # ensure shape is correct
+
+        # Preprocess image
         face_resized = cv2.resize(face_gray, (48, 48))
         arr = face_resized.astype('float32') / 255.0
         arr = np.expand_dims(arr, axis=0)   # (1,48,48)
         arr = np.expand_dims(arr, axis=-1)  # (1,48,48,1)
+
+        # Predict
         preds = model.predict(arr, verbose=0)
         preds = np.asarray(preds).reshape(-1)
+
         idx = int(np.argmax(preds))
         conf = float(np.max(preds))
-        if debug or DEBUG_PRED:
-            print(f"[camera.py] predict -> idx={idx}, conf={conf:.4f}, preds={np.round(preds,4)}")
+
+        # Emotion labels (MUST match training order)
+        emotion_labels = [
+            "Angry",
+            "Disgust",
+            "Fear",
+            "Happy",
+            "Sad",
+            "Surprise",
+            "Neutral"
+        ]
+
+        # 🔥 PRINT DESIRED OUTPUT
+        print("\n--- Softmax Probabilities ---")
+        for emotion, prob in zip(emotion_labels, preds):
+            print(f"{emotion:<10}: {prob:.4f}")
+
+        print("\nPredicted Emotion:", emotion_labels[idx])
+        print("Confidence:", conf)
+        print("-----------------------------\n")
+
         return idx, conf
+
     except Exception as e:
         if DEBUG_PRED:
             print("[camera.py] Prediction error:", e)
             traceback.print_exc()
         return None, 0.0
+
+    # ............................................................................................
+
+
 
 # -------------------------------
 # Threaded capture class
@@ -331,6 +389,7 @@ class VideoCamera(object):
                             with self.lock:
                                 self.emotion_window.append(pred_idx)
                         with self.lock:
+                            
                             try:
                                 final_idx = max(set(self.emotion_window), key=self.emotion_window.count) if len(self.emotion_window) > 0 else pred_idx
                             except Exception:
@@ -339,6 +398,9 @@ class VideoCamera(object):
                         label = emotion_dict.get(self.current_emotion, str(self.current_emotion))
                         cv2.putText(disp, f"{label}", (x + 10, max(20, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                         df_local = self._read_recs_for_emotion(self.current_emotion)
+
+                        
+                        
 
         try:
             ret, jpeg = cv2.imencode('.jpg', disp)

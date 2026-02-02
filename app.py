@@ -146,6 +146,7 @@ def gen(camera):
 # def get_started():
 #     return render_template('get_started.html')
 
+
 @app.route('/')
 def landing():
     return render_template('get_started.html')
@@ -166,7 +167,7 @@ def video_feed():
         return ("Camera not available", 503)
     return Response(gen(cam), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
+# # this.
 @app.route('/get_recs')
 def get_recs():
     """Return current recommendations as JSON (alias /t also provided)."""
@@ -178,6 +179,8 @@ def get_recs():
 @app.route('/t')
 def gen_table():
     return get_recs()
+
+# This route receives an emoji from the user, converts it into music recommendations, safely updates the backend state, releases the camera if needed, and returns the updated song list as JSON.
 
 
 @app.route('/set_emoji', methods=['POST'])
